@@ -1,4 +1,4 @@
-import { DataSource, Repository, Between, Like, LessThan } from "typeorm";
+import { DataSource, Repository, Between, Like } from "typeorm";
 import { MsgData, UserInfo, GroupInfo, DbVersion } from "../entities";
 import Redis from "ioredis";
 

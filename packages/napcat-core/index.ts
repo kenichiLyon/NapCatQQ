@@ -103,6 +103,7 @@ export class NapCatCore {
   selfInfo: SelfInfo;
   util: NodeQQNTWrapperUtil;
   configLoader: NapCatConfigLoader;
+  msgStorage!: MsgStorageService;
 
   // 通过构造器递过去的 runtime info 应该尽量少
   constructor (context: InstanceContext, selfInfo: SelfInfo) {
@@ -111,6 +112,7 @@ export class NapCatCore {
     this.util = this.context.wrapper.NodeQQNTWrapperUtil;
     this.eventWrapper = new NTEventWrapper(context.session);
     this.configLoader = new NapCatConfigLoader(this, this.context.pathWrapper.configPath, NapcatConfigSchema);
+    this.msgStorage = new MsgStorageService();
     this.apis = {
       FileApi: new NTQQFileApi(this.context, this),
       SystemApi: new NTQQSystemApi(this.context, this),
@@ -142,6 +144,9 @@ export class NapCatCore {
     if (!fs.existsSync(this.NapCatTempPath)) {
       fs.mkdirSync(this.NapCatTempPath, { recursive: true });
     }
+
+    await this.msgStorage.init(this.configLoader.configData.db);
+
     // 遍历this.apis[i].initApi 如果存在该函数进行async 调用
     for (const apiKey in this.apis) {
       const api = this.apis[apiKey as keyof StableNTApiWrapper];

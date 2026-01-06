@@ -378,6 +378,9 @@ importers:
       napcat-pty:
         specifier: workspace:*
         version: link:../napcat-pty
+      napcat-storage:
+        specifier: workspace:*
+        version: link:../napcat-storage
       ws:
         specifier: ^8.18.3
         version: 8.18.3

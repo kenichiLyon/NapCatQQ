@@ -15,7 +15,7 @@ export async function runTask<T, R> (workerScript: string, taskData: T): Promise
       });
 
       worker.on('error', (error) => {
-        reject(new Error(`Worker error: ${error.message}`));
+        reject(new Error(`Worker error: ${(error as Error).message}`));
       });
 
       worker.on('exit', (code) => {

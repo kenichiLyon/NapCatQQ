@@ -1,10 +1,10 @@
 {
   "compilerOptions": {
-    "target": "ES2021",
+    "target": "ES2022",
     "module": "ESNext",
     "moduleResolution": "Node",
     "lib": [
-      "ES2021"
+      "ES2022"
     ],
     "typeRoots": [
       "./node_modules/@types"
@@ -37,6 +37,9 @@
     "paths": {
       "@/*": [
         "packages/*"
+      ],
+      "napcat-storage": [
+        "packages/napcat-storage/src/index.ts"
       ]
     },
     "skipLibCheck": true,
