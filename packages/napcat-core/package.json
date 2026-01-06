@@ -27,7 +27,8 @@
         "compressing": "^1.10.1",
         "napcat-image-size": "workspace:*",
         "napcat-common": "workspace:*",
-        "napcat-protobuf": "workspace:*"
+        "napcat-protobuf": "workspace:*",
+        "napcat-storage": "workspace:*"
     },
     "devDependencies": {
         "@types/node": "^22.0.1"

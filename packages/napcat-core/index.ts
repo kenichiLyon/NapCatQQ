@@ -33,6 +33,7 @@ import { NativePacketHandler } from './packet/handler/client';
 import { container, ReceiverServiceRegistry } from './packet/handler/serviceRegister';
 import { appEvent } from './packet/handler/eventList';
 import { TypedEventEmitter } from './packet/handler/typeEvent';
+import { MsgStorageService } from 'napcat-storage';
 export * from './wrapper';
 export * from './types/index';
 export * from './services/index';
@@ -181,10 +182,14 @@ export class NapCatCore {
       this.selfInfo.online = false;
     };
     msgListener.onRecvMsg = (msgs) => {
-      msgs.forEach(msg => this.context.logger.logMessage(msg, this.selfInfo));
+      msgs.forEach(msg => {
+        this.context.logger.logMessage(msg, this.selfInfo);
+        this.msgStorage.saveMsg(msg);
+      });
     };
     msgListener.onAddSendMsg = (msg) => {
       this.context.logger.logMessage(msg, this.selfInfo);
+      this.msgStorage.saveMsg(msg);
     };
     this.context.session.getMsgService().addKernelMsgListener(
       proxiedListenerOf(msgListener, this.context.logger)
