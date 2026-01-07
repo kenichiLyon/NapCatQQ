@@ -1,12 +1,16 @@
-name: Pre-Release NapCat
+name: Pre-Release Branch
 
 on:
   workflow_dispatch:
   push:
-    tags:
-      - "v*-*"
+    branches:
+      - 'staging/pre-release'
 
 permissions: write-all
+
+concurrency:
+  group: pre-release-branch-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   OPENROUTER_API_URL: https://91vip.futureppo.top/v1/chat/completions
@@ -14,38 +18,62 @@ env:
   RELEASE_NAME: "NapCat"
 
 jobs:
-  validate-version:
+  validate-actor:
     runs-on: ubuntu-latest
     outputs:
-      valid: ${{ steps.check.outputs.valid }}
-      version: ${{ steps.check.outputs.version }}
-      prerelease: ${{ steps.check.outputs.prerelease }}
+      allowed: ${{ steps.check.outputs.allowed }}
     steps:
-      - name: Validate semantic version
+      - name: Check collaborator permission
         id: check
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TAG="${GITHUB_REF#refs/tags/}"
-          SEMVER_REGEX="^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z-.]+)?$"
-          if [[ "$TAG" =~ $SEMVER_REGEX ]]; then
-            echo "valid=true" >> $GITHUB_OUTPUT
-            echo "version=$TAG" >> $GITHUB_OUTPUT
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/collaborators/${GITHUB_ACTOR}")
+          if [ "$STATUS" = "204" ]; then
+            echo "allowed=true" >> $GITHUB_OUTPUT
           else
-            echo "valid=false" >> $GITHUB_OUTPUT
+            echo "allowed=false" >> $GITHUB_OUTPUT
             exit 1
           fi
-          if [[ "$TAG" == *-* ]]; then
-            echo "prerelease=true" >> $GITHUB_OUTPUT
-          else
-            echo "prerelease=false" >> $GITHUB_OUTPUT
-          fi
+
+  generate-version:
+    needs: validate-actor
+    if: needs.validate-actor.outputs.allowed == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      prev_tag: ${{ steps.version.outputs.prev_tag }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Generate SemVer pre-release version
+        id: version
+        run: |
+          LATEST_TAG=$(git describe --tags --abbrev=0 --match "v[0-9]*.[0-9]*.[0-9]*" 2>/dev/null || echo "v0.0.0")
+          BASE="${LATEST_TAG#v}"
+          MAJOR=$(echo "$BASE" | cut -d. -f1)
+          MINOR=$(echo "$BASE" | cut -d. -f2)
+          PATCH=$(echo "$BASE" | cut -d. -f3)
+          NEXT_PATCH=$((PATCH+1))
+          PRNUM="${GITHUB_RUN_NUMBER}"
+          VERSION="v${MAJOR}.${MINOR}.${NEXT_PATCH}-beta.${PRNUM}"
+          echo "NAPCAT_VERSION=${VERSION}" >> $GITHUB_ENV
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "prev_tag=${LATEST_TAG}" >> $GITHUB_OUTPUT
 
   Build-Framework:
-    needs: validate-version
-    if: needs.validate-version.outputs.valid == 'true'
+    needs: generate-version
     runs-on: ubuntu-latest
     steps:
       - name: Clone Main Repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Use Node.js 20.X
         uses: actions/setup-node@v4
         with:
@@ -53,9 +81,12 @@ jobs:
       - name: Build NapCat.Framework
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NAPCAT_VERSION: ${{ needs.generate-version.outputs.version }}
         run: |
           npm i -g pnpm
           pnpm i
+          pnpm run typecheck || exit 1
+          pnpm test || exit 1
           pnpm --filter napcat-webui-frontend run build || exit 1
           pnpm run build:framework
           mv packages/napcat-framework/dist framework-dist
@@ -69,12 +100,13 @@ jobs:
           path: framework-dist
 
   Build-Shell:
-    needs: validate-version
-    if: needs.validate-version.outputs.valid == 'true'
+    needs: generate-version
     runs-on: ubuntu-latest
     steps:
       - name: Clone Main Repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Use Node.js 20.X
         uses: actions/setup-node@v4
         with:
@@ -82,9 +114,12 @@ jobs:
       - name: Build NapCat.Shell
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NAPCAT_VERSION: ${{ needs.generate-version.outputs.version }}
         run: |
           npm i -g pnpm
           pnpm i
+          pnpm run typecheck || exit 1
+          pnpm test || exit 1
           pnpm --filter napcat-webui-frontend run build || exit 1
           pnpm run build:shell
           mv packages/napcat-shell/dist shell-dist
@@ -146,7 +181,8 @@ jobs:
           path: NapCat.Shell.Windows.Node
 
   release-napcat:
-    needs: [Build-Framework, Build-Shell, Download-QNX64]
+    environment: pre-release
+    needs: [generate-version, Build-Framework, Build-Shell, Download-QNX64]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -176,34 +212,20 @@ jobs:
           GITHUB_REPO: "NapCatQQ"
         run: |
           set -euo pipefail
-          CURRENT_TAG="${GITHUB_REF#refs/tags/}"
-          TAGS_JSON=$(curl -s "https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/tags?per_page=100")
-          TAGS=( $(echo "$TAGS_JSON" | jq -r '.[].name' | sort -V) )
-          PREV_TAG=""
-          for i in "${!TAGS[@]}"; do
-            if [ "${TAGS[$i]}" = "$CURRENT_TAG" ]; then
-              if [ $i -gt 0 ]; then
-                PREV_TAG="${TAGS[$((i-1))]}"
-              fi
-              break
-            fi
-          done
-          if [ -z "$PREV_TAG" ]; then
-            PREV_TAG=$(git rev-list --max-parents=0 HEAD | head -1)
-          fi
-          git fetch origin "refs/tags/$PREV_TAG:refs/tags/$PREV_TAG" --force || true
-          git fetch origin "refs/tags/$CURRENT_TAG:refs/tags/$CURRENT_TAG" --force || true
-          COMMITS=$(git log --pretty=format:'- %s (%h)' "$PREV_TAG".."$CURRENT_TAG" 2>/dev/null || git log --pretty=format:'- %s (%h)' -20)
-          FILE_STATS=$(git diff --stat "$PREV_TAG".."$CURRENT_TAG" 2>/dev/null || echo "")
+          CURRENT_TAG="${{ needs.generate-version.outputs.version }}"
+          PREV_TAG="${{ needs.generate-version.outputs.prev_tag }}"
+          git fetch --tags --force || true
+          COMMITS=$(git log --pretty=format:'- %s (%h)' "$PREV_TAG"..HEAD 2>/dev/null || git log --pretty=format:'- %s (%h)' -20)
+          FILE_STATS=$(git diff --stat "$PREV_TAG"..HEAD 2>/dev/null || echo "")
           SUMMARY_LINE=$(echo "$FILE_STATS" | tail -1)
           FILE_CHANGES=$(echo "$FILE_STATS" | head -n -1 | head -50 | cut -c1-80)
           FILE_COUNT=$(echo "$FILE_STATS" | head -n -1 | wc -l)
           if [ "$FILE_COUNT" -gt 50 ]; then
-            DIR_STATS=$(git diff --stat "$PREV_TAG".."$CURRENT_TAG" 2>/dev/null | head -n -1 | sed 's/|.*//g' | awk -F'/' '{if(NF>1) print $1"/"$2; else print $1}' | sort | uniq -c | sort -rn | head -20)
+            DIR_STATS=$(git diff --stat "$PREV_TAG"..HEAD 2>/dev/null | head -n -1 | sed 's/|.*//g' | awk -F'/' '{if(NF>1) print $1"/"$2; else print $1}' | sort | uniq -c | sort -rn | head -20)
             FILE_CHANGES="[按目录分组统计 - 共 $FILE_COUNT 个文件变更]
           $DIR_STATS"
           fi
-          KEY_FILES=$(git diff --name-only "$PREV_TAG".."$CURRENT_TAG" 2>/dev/null | grep -E "^packages/napcat-(core|onebot|webui-backend|shell)/" || true | grep -E "\.(ts|js)$" || true | grep -v -E "(test|spec|\.d\.ts|config)" || true | head -15) || true
+          KEY_FILES=$(git diff --name-only "$PREV_TAG"..HEAD 2>/dev/null | grep -E "^packages/napcat-(core|onebot|webui-backend|shell)/" || true | grep -E "\.(ts|js)$" || true | grep -v -E "(test|spec|\.d\.ts|config)" || true | head -15) || true
           CODE_DIFF=""
           DIFF_CHAR_LIMIT=6000
           CURRENT_CHARS=0
@@ -214,7 +236,7 @@ jobs:
           [... 更多文件变化已截断 ...]"
                 break
               fi
-              FILE_DIFF=$(git diff "$PREV_TAG".."$CURRENT_TAG" -- "$file" 2>/dev/null | head -50) || true
+              FILE_DIFF=$(git diff "$PREV_TAG"..HEAD -- "$file" 2>/dev/null | head -50) || true
               FILE_DIFF_LEN=${#FILE_DIFF}
               if [ "$FILE_DIFF_LEN" -gt 1500 ]; then
                 FILE_DIFF=$(echo "$FILE_DIFF" | head -c 1500)
@@ -223,7 +245,7 @@ jobs:
               fi
               if [ -n "$FILE_DIFF" ]; then
                 CODE_DIFF="$CODE_DIFF
-
+          
           ### $file
           \`\`\`diff
           $FILE_DIFF
@@ -233,13 +255,13 @@ jobs:
             done
           fi
           if [ -z "$CODE_DIFF" ]; then
-            TOP_FILES=$(git diff --name-only "$PREV_TAG".."$CURRENT_TAG" 2>/dev/null | grep -E "\.(ts|js|yml|md)$" | head -5) || true
+            TOP_FILES=$(git diff --name-only "$PREV_TAG"..HEAD 2>/dev/null | grep -E "\.(ts|js|yml|md)$" | head -5) || true
             if [ -n "$TOP_FILES" ]; then
               for file in $TOP_FILES; do
-                FILE_DIFF=$(git diff "$PREV_TAG".."$CURRENT_TAG" -- "$file" 2>/dev/null | head -30) || true
+                FILE_DIFF=$(git diff "$PREV_TAG"..HEAD -- "$file" 2>/dev/null | head -30) || true
                 if [ -n "$FILE_DIFF" ] && [ ${#FILE_DIFF} -lt 1000 ]; then
                   CODE_DIFF="$CODE_DIFF
-
+          
           ### $file
           \`\`\`diff
           $FILE_DIFF
@@ -255,16 +277,16 @@ jobs:
           SYSTEM_PROMPT=$(<"$PROMPT_FILE")
           USER_CONTENT="当前版本: $CURRENT_TAG
           上一版本: $PREV_TAG
-
+          
           ## 提交列表
           $COMMITS
-
+          
           ## 文件变化统计
           $SUMMARY_LINE
-
+          
           ## 变更文件列表
           $FILE_CHANGES
-
+          
           ## 关键代码变化
           $CODE_DIFF"
           BODY=$(jq -n --arg system "$SYSTEM_PROMPT" --arg user "$USER_CONTENT" --arg model "$OPENROUTER_MODEL" '{model: $model, messages:[{role:"system", content:$system},{role:"user", content:$user}], temperature:0.2, max_tokens:1500}')
@@ -284,9 +306,11 @@ jobs:
       - name: Create Pre-Release and Upload Artifacts
         uses: softprops/action-gh-release@v1
         with:
-          name: NapCat ${{ github.ref_name }}
+          name: NapCat ${{ needs.generate-version.outputs.version }}
           token: ${{ secrets.GITHUB_TOKEN }}
           body_path: CHANGELOG.md
+          tag_name: ${{ needs.generate-version.outputs.version }}
+          target_commitish: ${{ github.sha }}
           files: |
             NapCat.Shell.Windows.Node.zip
             NapCat.Framework.zip
@@ -294,3 +318,4 @@ jobs:
             NapCat.Shell.Windows.OneKey.zip
           prerelease: true
           draft: false
+

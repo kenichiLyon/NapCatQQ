@@ -6,7 +6,7 @@ on:
 
 jobs:
   shell-docker:
-    if: github.event.release.prerelease == false
+    if: github.event.release.prerelease == false && !contains(github.event.release.tag_name, '-')
     runs-on: ubuntu-latest
     steps:
       - name: Trigger NapCat-Docker docker-publish workflow
@@ -19,7 +19,7 @@ jobs:
             https://api.github.com/repos/NapNeko/NapCat-Docker/actions/workflows/docker-publish.yml/dispatches \
             -d '{"ref":"main"}'
   framework-docker:
-    if: github.event.release.prerelease == false
+    if: github.event.release.prerelease == false && !contains(github.event.release.tag_name, '-')
     runs-on: ubuntu-latest
     steps:
       - name: Trigger NapCat-Framework-Docker docker-publish workflow
@@ -32,7 +32,7 @@ jobs:
             https://api.github.com/repos/NapNeko/NapCat.Docker.Framework/actions/workflows/docker-image.yml/dispatches \
             -d '{"ref":"main"}'
   appimage-shell-docker:
-    if: github.event.release.prerelease == false
+    if: github.event.release.prerelease == false && !contains(github.event.release.tag_name, '-')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
@@ -59,7 +59,7 @@ jobs:
                 https://api.github.com/repos/NapNeko/NapCatAppImageBuild/actions/workflows/release.yml/dispatches \
                 -d "{\"ref\":\"main\",\"inputs\":{\"napcat_version\":\"${NAPCAT_VERSION}\",\"qq_version_x86_64\":\"${QQ_VERSION_X86_64}\",\"qq_version_arm64\":\"${QQ_VERSION_ARM64}\"}}"
   node-shell-docker:
-    if: github.event.release.prerelease == false
+    if: github.event.release.prerelease == false && !contains(github.event.release.tag_name, '-')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
