@@ -6,6 +6,14 @@ import { builtinModules } from 'module';
 import napcatVersion from 'napcat-vite/vite-plugin-version.js';
 import { autoIncludeTSPlugin } from 'napcat-vite/vite-auto-include.js';
 import react from '@vitejs/plugin-react-swc';
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+let sqlWasmPath: string | null = null;
+try {
+  sqlWasmPath = require.resolve('sql.js/dist/sql-wasm.wasm');
+} catch {
+  sqlWasmPath = null;
+}
 
 // 依赖排除
 const external = [
@@ -28,6 +36,7 @@ const ShellBaseConfigPlugin: PluginOption[] = [
       { src: '../napcat-native/', dest: 'dist/native', flatten: false },
       { src: '../napcat-webui-frontend/dist/', dest: 'dist/static/', flatten: false },
       { src: '../napcat-webui-backend/src/assets/sw_template.js', dest: 'dist/static/' },
+      ...(sqlWasmPath ? [{ src: sqlWasmPath, dest: 'dist/static/' }] as any : []),
       { src: '../napcat-core/external/napcat.json', dest: 'dist/config/' },
       { src: '../../package.json', dest: 'dist' },
       { src: '../napcat-shell-loader', dest: 'dist' },

@@ -49,6 +49,12 @@ export class MsgStorageService {
         try {
             const type = (config.type as any);
             if (type === 'sqljs') {
+                if (!this.canUseSqljs()) {
+                    console.warn("[MsgStorage] SQL.js runtime asset not available, fallback to file storage");
+                    await this.ensureFallbackFile();
+                    this.isEnabled = false;
+                    return;
+                }
                 const dbFile = this.resolveSqlJsDbFile();
                 let database: Uint8Array | undefined = undefined;
                 try {
@@ -66,7 +72,16 @@ export class MsgStorageService {
                         await fs.mkdir(path.dirname(dbFile), { recursive: true });
                         await fs.writeFile(dbFile, Buffer.from(db));
                     },
-                    database
+                    database,
+                    sqlJsConfig: {
+                        locateFile: (file: string) => {
+                            const envPath = process.env['NAPCAT_SQLJS_WASM_PATH'];
+                            if (envPath && file.endsWith('.wasm')) return envPath;
+                            const staticPath = path.join(process.cwd(), 'static', file);
+                            try { require('fs').accessSync(staticPath); return staticPath; } catch {}
+                            return path.join(process.cwd(), 'node_modules', 'sql.js', 'dist', file);
+                        }
+                    }
                 } as any);
             } else {
                 this.dataSource = new DataSource({
@@ -305,6 +320,15 @@ export class MsgStorageService {
         const base = process.env['NAPCAT_WORKDIR'] || process.cwd();
         const dir = path.join(base, 'storage');
         return path.join(dir, 'napcat_sqlite.sqljs');
+    }
+
+    private canUseSqljs(): boolean {
+        const envPath = process.env['NAPCAT_SQLJS_WASM_PATH'];
+        if (envPath) {
+            try { require('fs').accessSync(envPath); return true; } catch { return false; }
+        }
+        const wasmDefault = path.join(process.cwd(), 'node_modules', 'sql.js', 'dist', 'sql-wasm.wasm');
+        try { require('fs').accessSync(wasmDefault); return true; } catch { return false; }
     }
 
     private extractContent(elements: any[]): string {
