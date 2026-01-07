@@ -189,4 +189,5 @@ interface WebUIConfig {
   loginRate: number;
   disableWebUI: boolean;
   disableNonLANAccess: boolean;
+  msgDbEnable?: boolean;
 }

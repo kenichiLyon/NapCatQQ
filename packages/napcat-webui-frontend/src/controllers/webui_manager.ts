@@ -238,6 +238,21 @@ export default class WebUIManager {
     return data.data;
   }
 
+  public static async getMsgDbEnable () {
+    const { data } = await serverRequest.get<ServerResponse<boolean>>(
+      '/WebUIConfig/GetMsgDbEnable'
+    );
+    return data.data;
+  }
+
+  public static async updateMsgDbEnable (enable: boolean) {
+    const { data } = await serverRequest.post<ServerResponse<boolean>>(
+      '/WebUIConfig/UpdateMsgDbEnable',
+      { enable }
+    );
+    return data.data;
+  }
+
   // 获取是否禁用WebUI
   public static async getDisableWebUI () {
     const { data } = await serverRequest.get<ServerResponse<boolean>>(

@@ -12,7 +12,7 @@ export const NapcatConfigSchema = Type.Object({
   packetServer: Type.String({ default: '' }),
   o3HookMode: Type.Number({ default: 0 }),
   db: Type.Object({
-    enable: Type.Boolean({ default: false }),
+    enable: Type.Boolean({ default: true }),
     type: Type.String({ default: 'mysql' }),
     host: Type.String({ default: 'localhost' }),
     port: Type.Number({ default: 3306 }),

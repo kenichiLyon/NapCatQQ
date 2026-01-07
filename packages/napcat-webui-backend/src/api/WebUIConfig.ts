@@ -13,6 +13,7 @@ export const GetWebUIConfigHandler: RequestHandler = async (_, res) => {
       loginRate: config.loginRate,
       disableWebUI: config.disableWebUI,
       disableNonLANAccess: config.disableNonLANAccess,
+      msgDbEnable: (config as any).msgDbEnable ?? true,
     });
   } catch (error) {
     const msg = (error as Error).message;
@@ -118,10 +119,59 @@ export const UpdateWebUIConfigHandler: RequestHandler = async (req, res) => {
       updateConfig.disableNonLANAccess = disableNonLANAccess;
     }
 
+    if (req.body.msgDbEnable !== undefined) {
+      if (typeof req.body.msgDbEnable !== 'boolean') {
+        return sendError(res, 'msgDbEnable必须是布尔值');
+      }
+      updateConfig.msgDbEnable = req.body.msgDbEnable;
+    }
+
     await WebUiConfig.UpdateWebUIConfig(updateConfig);
     return sendSuccess(res, null);
   } catch (error) {
     const msg = (error as Error).message;
     return sendError(res, `更新WebUI配置失败: ${msg}`);
+  }
+};
+
+// 获取消息数据库开关
+export const GetMsgDbEnableHandler: RequestHandler = async (_, res) => {
+  try {
+    const config = await WebUiConfig.GetWebUIConfig();
+    return sendSuccess(res, (config as any).msgDbEnable ?? true);
+  } catch (error) {
+    const msg = (error as Error).message;
+    return sendError(res, `获取消息数据库开关失败: ${msg}`);
+  }
+};
+
+// 更新消息数据库开关并同步到 napcat.json
+import { webUiPathWrapper } from '@/napcat-webui-backend/index';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+
+export const UpdateMsgDbEnableHandler: RequestHandler = async (req, res) => {
+  try {
+    const { enable } = req.body;
+    if (typeof enable !== 'boolean') {
+      return sendError(res, 'enable必须是布尔值');
+    }
+    await WebUiConfig.UpdateWebUIConfig({ msgDbEnable: enable });
+    const cfgDir = webUiPathWrapper.configPath;
+    const files = await fs.readdir(cfgDir);
+    const targets = files.filter(f => f.startsWith('napcat') && f.endsWith('.json')).map(f => path.join(cfgDir, f));
+    for (const file of targets) {
+      try {
+        const content = await fs.readFile(file, 'utf-8');
+        const json = JSON.parse(content);
+        json.db = json.db || {};
+        json.db.enable = enable;
+        await fs.writeFile(file, JSON.stringify(json, null, 2), 'utf-8');
+      } catch {}
+    }
+    return sendSuccess(res, true);
+  } catch (error) {
+    const msg = (error as Error).message;
+    return sendError(res, `更新消息数据库开关失败: ${msg}`);
   }
 };

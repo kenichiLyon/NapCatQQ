@@ -6,6 +6,8 @@ import {
   GetDisableNonLANAccessHandler,
   UpdateDisableNonLANAccessHandler,
   UpdateWebUIConfigHandler,
+  GetMsgDbEnableHandler,
+  UpdateMsgDbEnableHandler,
 } from '@/napcat-webui-backend/src/api/WebUIConfig';
 
 const router = Router();
@@ -27,5 +29,10 @@ router.get('/GetDisableNonLANAccess', GetDisableNonLANAccessHandler);
 
 // 更新是否禁用非局域网访问
 router.post('/UpdateDisableNonLANAccess', UpdateDisableNonLANAccessHandler);
+
+// 获取消息数据库开关
+router.get('/GetMsgDbEnable', GetMsgDbEnableHandler);
+// 更新消息数据库开关（同步napcat.json）
+router.post('/UpdateMsgDbEnable', UpdateMsgDbEnableHandler);
 
 export { router as WebUIConfigRouter };

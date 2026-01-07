@@ -22,6 +22,8 @@ const WebUiConfigSchema = Type.Object({
   disableWebUI: Type.Boolean({ default: false }),
   // 是否关闭非局域网访问
   disableNonLANAccess: Type.Boolean({ default: false }),
+  // 消息数据库开关
+  msgDbEnable: Type.Boolean({ default: true }),
 });
 
 export type WebUiConfigType = Static<typeof WebUiConfigSchema>;

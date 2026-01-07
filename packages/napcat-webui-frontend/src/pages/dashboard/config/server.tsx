@@ -29,6 +29,7 @@ const ServerConfigCard = () => {
     loginRate: number;
     disableWebUI: boolean;
     disableNonLANAccess: boolean;
+    msgDbEnable: boolean;
   }>({
     defaultValues: {
       host: '0.0.0.0',
@@ -36,6 +37,7 @@ const ServerConfigCard = () => {
       loginRate: 10,
       disableWebUI: false,
       disableNonLANAccess: false,
+      msgDbEnable: true,
     },
   });
 
@@ -46,6 +48,7 @@ const ServerConfigCard = () => {
       setConfigValue('loginRate', configData.loginRate);
       setConfigValue('disableWebUI', configData.disableWebUI);
       setConfigValue('disableNonLANAccess', configData.disableNonLANAccess);
+      setConfigValue('msgDbEnable', configData.msgDbEnable ?? true);
     }
   };
 
@@ -171,6 +174,19 @@ const ServerConfigCard = () => {
                 disabled={!!configError}
                 label='禁用非局域网访问'
                 description='启用后只允许局域网内的设备访问WebUI，提高安全性'
+              />
+            )}
+          />
+          <Controller
+            control={control}
+            name='msgDbEnable'
+            render={({ field }) => (
+              <SwitchCard
+                value={field.value}
+                onValueChange={(value: boolean) => field.onChange(value)}
+                disabled={!!configError}
+                label='启用消息数据库'
+                description='开启后将持久化保存消息记录并提供历史查询与检索'
               />
             )}
           />
