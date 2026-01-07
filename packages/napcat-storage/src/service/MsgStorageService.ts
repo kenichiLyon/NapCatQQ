@@ -317,8 +317,10 @@ export class MsgStorageService {
     }
 
     private resolveSqlJsDbFile(): string {
+        const override = process.env['NAPCAT_DB_PATH'];
+        if (override) return override;
         const base = process.env['NAPCAT_WORKDIR'] || process.cwd();
-        const dir = path.join(base, 'storage');
+        const dir = path.join(base, 'config', 'db');
         return path.join(dir, 'napcat_sqlite.sqljs');
     }
 
