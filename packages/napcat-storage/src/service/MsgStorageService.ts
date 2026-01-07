@@ -33,6 +33,7 @@ export class MsgStorageService {
     private groupRepo!: Repository<GroupInfo>;
     private isEnabled: boolean = false;
     private memoryStore: any[] = [];
+    private slowThresholdMs = 200;
 
     async init(config: DbConfig) {
         if (!config.enable) {
@@ -64,6 +65,8 @@ export class MsgStorageService {
             this.userRepo = this.dataSource.getRepository(UserInfo);
             this.groupRepo = this.dataSource.getRepository(GroupInfo);
 
+            await this.ensureIndexes(config.type);
+
             this.redis = new Redis({
                 host: config.redisHost,
                 port: config.redisPort,
@@ -77,6 +80,19 @@ export class MsgStorageService {
         } catch (error) {
             console.error("[MsgStorage] Init failed", error);
         }
+    }
+
+    private async ensureIndexes(dbType: string) {
+        try {
+            if (dbType === 'mysql') {
+                await this.dataSource.query("ALTER TABLE msg_data ADD INDEX idx_msg_time (msg_time)");
+                await this.dataSource.query("ALTER TABLE msg_data ADD FULLTEXT INDEX ft_content (content)");
+            } else if (dbType === 'postgres' || dbType === 'postgresql') {
+                await this.dataSource.query("CREATE INDEX IF NOT EXISTS idx_msg_time ON msg_data (msg_time)");
+                await this.dataSource.query("CREATE EXTENSION IF NOT EXISTS pg_trgm");
+                await this.dataSource.query("CREATE INDEX IF NOT EXISTS idx_content_fts ON msg_data USING GIN (to_tsvector('simple', content))");
+            }
+        } catch {}
     }
 
     async saveMsg(msg: any) {
@@ -119,6 +135,40 @@ export class MsgStorageService {
         }
     }
 
+    async saveMsgsBulk(msgs: any[]) {
+        if (!this.isEnabled) {
+            msgs.forEach(m => this.saveToMemory(m));
+            return;
+        }
+        const runner = this.dataSource.createQueryRunner();
+        await runner.connect();
+        await runner.startTransaction();
+        try {
+            const contentMsgs = msgs.map(msg => {
+                const m = new MsgData();
+                m.msg_id = msg.msgId;
+                m.msg_seq = msg.msgSeq;
+                m.msg_random = msg.msgRandom;
+                m.msg_time = msg.msgTime;
+                m.sender_id = msg.senderUid;
+                m.sender_uin = msg.senderUin;
+                m.peer_id = msg.peerUid;
+                m.peer_uin = msg.peerUin;
+                m.chat_type = msg.chatType;
+                m.content = this.extractContent(msg.elements);
+                m.raw_elements = msg.elements;
+                return m;
+            });
+            await runner.manager.save(MsgData, contentMsgs);
+            await runner.commitTransaction();
+        } catch (e) {
+            await runner.rollbackTransaction();
+            msgs.forEach(m => this.saveToMemory(m));
+        } finally {
+            await runner.release();
+        }
+    }
+
     private saveToMemory(msg: any) {
         this.memoryStore.push(msg);
         if (this.memoryStore.length > 1000) {
@@ -127,10 +177,10 @@ export class MsgStorageService {
     }
 
     async queryMsg(params: MsgQueryParams) {
-        if (!this.isEnabled) return { list: [], total: 0 };
-
         const page = params.page || 1;
         const pageSize = params.pageSize || 50;
+        if (!this.isEnabled) return { list: [], total: 0, page, pageSize };
+
         const skip = (page - 1) * pageSize;
 
         const where: any = {};
@@ -148,16 +198,42 @@ export class MsgStorageService {
             where.chat_type = 2;
         }
 
+        let list: MsgData[] = [];
+        let total = 0;
+        const t0 = Date.now();
         if (params.keyword) {
-            where.content = Like(`%${params.keyword}%`);
+            try {
+                const qb = this.msgRepo.createQueryBuilder('m').where(where);
+                if ((this.dataSource.options.type as string) === 'mysql') {
+                    await this.dataSource.query("SET SESSION innodb_ft_user_stopword_table=DEFAULT");
+                    qb.andWhere("MATCH(m.content) AGAINST (:kw IN BOOLEAN MODE)", { kw: params.keyword + '*' });
+                } else {
+                    qb.andWhere("to_tsvector('simple', m.content) @@ plainto_tsquery('simple', :kw)", { kw: params.keyword });
+                }
+                qb.orderBy('m.msg_time', 'DESC').skip(skip).take(pageSize);
+                [list, total] = await qb.getManyAndCount();
+            } catch {
+                const res = await this.msgRepo.findAndCount({
+                    where: { ...where, content: Like(`%${params.keyword}%`) },
+                    order: { msg_time: "DESC" },
+                    skip,
+                    take: pageSize
+                });
+                list = res[0]; total = res[1];
+            }
+        } else {
+            const res = await this.msgRepo.findAndCount({
+                where,
+                order: { msg_time: "DESC" },
+                skip,
+                take: pageSize
+            });
+            list = res[0]; total = res[1];
         }
-
-        const [list, total] = await this.msgRepo.findAndCount({
-            where,
-            order: { msg_time: "DESC" },
-            skip,
-            take: pageSize
-        });
+        const t1 = Date.now();
+        if ((t1 - t0) > this.slowThresholdMs) {
+            console.warn(`[MsgStorage] Slow query ${t1 - t0}ms params=${JSON.stringify(params)}`);
+        }
 
         return { list, total, page, pageSize };
     }

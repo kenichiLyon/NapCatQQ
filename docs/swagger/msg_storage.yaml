@@ -1,0 +1,71 @@
+openapi: 3.0.3
+info:
+  title: NapCatQQ Message Storage API
+  version: 1.0.0
+  description: Message history query API for NapCatQQ
+servers:
+  - url: http://localhost:6099
+paths:
+  /MsgStorage/history:
+    get:
+      summary: Query message history
+      parameters:
+        - in: query
+          name: startTime
+          schema:
+            type: integer
+        - in: query
+          name: endTime
+          schema:
+            type: integer
+        - in: query
+          name: senderId
+          schema:
+            type: string
+        - in: query
+          name: groupId
+          schema:
+            type: string
+        - in: query
+          name: keyword
+          schema:
+            type: string
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+        - in: query
+          name: pageSize
+          schema:
+            type: integer
+            default: 50
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  list:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        msg_id:
+                          type: string
+                        content:
+                          type: string
+                        msg_time:
+                          type: integer
+                        sender_id:
+                          type: string
+                        peer_id:
+                          type: string
+                  total:
+                    type: integer
+                  page:
+                    type: integer
+                  pageSize:
+                    type: integer

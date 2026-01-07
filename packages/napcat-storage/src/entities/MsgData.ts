@@ -1,4 +1,6 @@
-import { Entity, PrimaryColumn, Column, Index, CreateDateColumn } from "typeorm";
+import { Entity, PrimaryColumn, Column, Index, CreateDateColumn, ManyToOne, JoinColumn } from "typeorm";
+import { UserInfo } from "./UserInfo";
+import { GroupInfo } from "./GroupInfo";
 
 @Entity()
 export class MsgData {
@@ -12,19 +14,19 @@ export class MsgData {
     msg_random!: string;
 
     @Index()
-    @Column("varchar", { length: 20 })
-    msg_time!: string; // Timestamp from msg
+    @Column("bigint")
+    msg_time!: string;
 
     @Index()
     @Column("varchar", { length: 64 })
-    sender_id!: string; // senderUid
+    sender_id!: string;
 
     @Column("varchar", { length: 20 })
     sender_uin!: string;
 
     @Index()
     @Column("varchar", { length: 64 })
-    peer_id!: string; // peerUid
+    peer_id!: string;
 
     @Column("varchar", { length: 20 })
     peer_uin!: string;
@@ -33,11 +35,19 @@ export class MsgData {
     chat_type!: number;
 
     @Column("text")
-    content!: string; // Human readable content for search
+    content!: string;
 
     @Column("simple-json")
-    raw_elements!: any; // The elements array
+    raw_elements!: any;
 
     @CreateDateColumn()
     created_at!: Date;
+
+    @ManyToOne(() => UserInfo, { nullable: true })
+    @JoinColumn({ name: "sender_id", referencedColumnName: "user_id" })
+    sender!: UserInfo | null;
+
+    @ManyToOne(() => GroupInfo, { nullable: true })
+    @JoinColumn({ name: "peer_id", referencedColumnName: "group_id" })
+    group!: GroupInfo | null;
 }
