@@ -303,9 +303,12 @@ importers:
       reflect-metadata:
         specifier: ^0.2.0
         version: 0.2.2
+      sql.js:
+        specifier: ^1.9.0
+        version: 1.13.0
       typeorm:
         specifier: ^0.3.20
-        version: 0.3.28(better-sqlite3@12.5.0)(ioredis@5.9.0)(mysql2@3.16.0)(pg@8.16.3)
+        version: 0.3.28(better-sqlite3@12.5.0)(ioredis@5.9.0)(mysql2@3.16.0)(pg@8.16.3)(sql.js@1.13.0)
     devDependencies:
       '@types/node':
         specifier: ^20.0.0
@@ -6241,6 +6244,9 @@ packages:
   sql-highlight@6.1.0:
     resolution: {integrity: sha512-ed7OK4e9ywpE7pgRMkMQmZDPKSVdm0oX5IEtZiKnFucSF0zu6c80GZBe38UqHuVhTWJ9xsKgSMjCG2bml86KvA==}
     engines: {node: '>=14'}
+
+  sql.js@1.13.0:
+    resolution: {integrity: sha512-RJbVP1HRDlUUXahJ7VMTcu9Rm1Nzw+EBpoPr94vnbD4LwR715F3CcxE2G2k45PewcaZ57pjetYa+LoSJLAASgA==}
 
   sqlstring@2.3.3:
     resolution: {integrity: sha512-qC9iz2FlN7DQl3+wjwn3802RTyjCx7sDvfQEXchwa6CWOx07/WVfh91gBmQ9fahw8snwGEWU3xGzOt4tFyHLxg==}
@@ -13818,6 +13824,8 @@ snapshots:
 
   sql-highlight@6.1.0: {}
 
+  sql.js@1.13.0: {}
+
   sqlstring@2.3.3: {}
 
   ssri@9.0.1:
@@ -14238,7 +14246,7 @@ snapshots:
 
   typedarray@0.0.6: {}
 
-  typeorm@0.3.28(better-sqlite3@12.5.0)(ioredis@5.9.0)(mysql2@3.16.0)(pg@8.16.3):
+  typeorm@0.3.28(better-sqlite3@12.5.0)(ioredis@5.9.0)(mysql2@3.16.0)(pg@8.16.3)(sql.js@1.13.0):
     dependencies:
       '@sqltools/formatter': 1.2.5
       ansis: 4.2.0
@@ -14260,6 +14268,7 @@ snapshots:
       ioredis: 5.9.0
       mysql2: 3.16.0
       pg: 8.16.3
+      sql.js: 1.13.0
     transitivePeerDependencies:
       - babel-plugin-macros
       - supports-color

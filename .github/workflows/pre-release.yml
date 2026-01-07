@@ -25,6 +25,11 @@ jobs:
           version: 8
           run_install: true
 
+      - name: Prepare Embedded DB (SQL.js)
+        env:
+          NAPCAT_WORKDIR: ${{ github.workspace }}/workdir
+        run: node scripts/ci_sqljs_check.mjs
+
       - name: Validate SemVer Tag
         id: semver
         shell: bash

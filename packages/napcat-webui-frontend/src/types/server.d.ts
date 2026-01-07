@@ -190,4 +190,5 @@ interface WebUIConfig {
   disableWebUI: boolean;
   disableNonLANAccess: boolean;
   msgDbEnable?: boolean;
+  dbType?: 'mysql' | 'postgres' | 'sqljs';
 }

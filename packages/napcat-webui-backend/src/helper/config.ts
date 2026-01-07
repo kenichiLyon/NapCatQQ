@@ -24,6 +24,8 @@ const WebUiConfigSchema = Type.Object({
   disableNonLANAccess: Type.Boolean({ default: false }),
   // 消息数据库开关
   msgDbEnable: Type.Boolean({ default: true }),
+  // 数据库类型：mysql/postgres/sqljs
+  dbType: Type.String({ default: 'sqljs' }),
 });
 
 export type WebUiConfigType = Static<typeof WebUiConfigSchema>;

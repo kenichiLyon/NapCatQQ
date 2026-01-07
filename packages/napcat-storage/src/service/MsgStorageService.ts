@@ -1,6 +1,8 @@
 import { DataSource, Repository, Between, Like } from "typeorm";
 import { MsgData, UserInfo, GroupInfo, DbVersion } from "../entities";
 import Redis from "ioredis";
+import fs from "node:fs/promises";
+import path from "node:path";
 
 export interface DbConfig {
     enable: boolean;
@@ -34,29 +36,55 @@ export class MsgStorageService {
     private isEnabled: boolean = false;
     private memoryStore: any[] = [];
     private slowThresholdMs = 200;
+    private fallbackFilePath: string | null = null;
 
     async init(config: DbConfig) {
+        this.fallbackFilePath = this.resolveFallbackPath();
         if (!config.enable) {
             console.log("[MsgStorage] Disabled in config");
+            await this.ensureFallbackFile();
             return;
         }
 
         try {
-            this.dataSource = new DataSource({
-                type: config.type as any,
-                host: config.host,
-                port: config.port,
-                username: config.username,
-                password: config.password,
-                database: config.database,
-                entities: [MsgData, UserInfo, GroupInfo, DbVersion],
-                synchronize: true, // Auto schema sync for now
-                logging: false,
-                poolSize: 10, // Equivalent to HikariCP pooling
-                extra: {
-                    connectionLimit: 10 // For mysql2
-                }
-            });
+            const type = (config.type as any);
+            if (type === 'sqljs') {
+                const dbFile = this.resolveSqlJsDbFile();
+                let database: Uint8Array | undefined = undefined;
+                try {
+                    const buf = await fs.readFile(dbFile);
+                    database = new Uint8Array(buf);
+                } catch {}
+                this.dataSource = new DataSource({
+                    type: 'sqljs',
+                    entities: [MsgData, UserInfo, GroupInfo, DbVersion],
+                    synchronize: true,
+                    logging: false,
+                    location: 'napcat_sqljs',
+                    autoSave: true,
+                    autoSaveCallback: async (db: Uint8Array) => {
+                        await fs.mkdir(path.dirname(dbFile), { recursive: true });
+                        await fs.writeFile(dbFile, Buffer.from(db));
+                    },
+                    database
+                } as any);
+            } else {
+                this.dataSource = new DataSource({
+                    type,
+                    host: config.host,
+                    port: config.port,
+                    username: config.username,
+                    password: config.password,
+                    database: config.database,
+                    entities: [MsgData, UserInfo, GroupInfo, DbVersion],
+                    synchronize: true, // Auto schema sync for now
+                    logging: false,
+                    poolSize: 10, // Equivalent to HikariCP pooling
+                    extra: {
+                        connectionLimit: 10 // For mysql2
+                    }
+                });
+            }
 
             await this.dataSource.initialize();
             console.log("[MsgStorage] Database connected");
@@ -79,7 +107,33 @@ export class MsgStorageService {
             this.isEnabled = true;
         } catch (error) {
             console.error("[MsgStorage] Init failed", error);
+            await this.ensureFallbackFile();
         }
+    }
+
+    private resolveFallbackPath(): string {
+        const base = process.env['NAPCAT_WORKDIR'] || process.cwd();
+        const dir = path.join(base, 'storage');
+        return path.join(dir, 'msg_fallback.jsonl');
+    }
+
+    private async ensureFallbackFile() {
+        if (!this.fallbackFilePath) return;
+        const dir = path.dirname(this.fallbackFilePath);
+        await fs.mkdir(dir, { recursive: true });
+        try {
+            await fs.access(this.fallbackFilePath);
+        } catch {
+            await fs.writeFile(this.fallbackFilePath, "");
+        }
+    }
+
+    private async appendFallback(msg: any) {
+        if (!this.fallbackFilePath) return;
+        const line = JSON.stringify(msg) + "\n";
+        try {
+            await fs.appendFile(this.fallbackFilePath, line, "utf-8");
+        } catch {}
     }
 
     private async ensureIndexes(dbType: string) {
@@ -91,6 +145,8 @@ export class MsgStorageService {
                 await this.dataSource.query("CREATE INDEX IF NOT EXISTS idx_msg_time ON msg_data (msg_time)");
                 await this.dataSource.query("CREATE EXTENSION IF NOT EXISTS pg_trgm");
                 await this.dataSource.query("CREATE INDEX IF NOT EXISTS idx_content_fts ON msg_data USING GIN (to_tsvector('simple', content))");
+            } else if (dbType === 'sqljs') {
+                await this.dataSource.query("CREATE INDEX IF NOT EXISTS idx_msg_time ON msg_data (msg_time)");
             }
         } catch {}
     }
@@ -98,6 +154,7 @@ export class MsgStorageService {
     async saveMsg(msg: any) {
         if (!this.isEnabled) {
             this.saveToMemory(msg);
+            await this.appendFallback(msg);
             return;
         }
         
@@ -132,12 +189,14 @@ export class MsgStorageService {
         } catch (e) {
             console.error("[MsgStorage] Save msg failed, fallback to memory", e);
             this.saveToMemory(msg);
+            await this.appendFallback(msg);
         }
     }
 
     async saveMsgsBulk(msgs: any[]) {
         if (!this.isEnabled) {
             msgs.forEach(m => this.saveToMemory(m));
+            await Promise.all(msgs.map(m => this.appendFallback(m)));
             return;
         }
         const runner = this.dataSource.createQueryRunner();
@@ -164,6 +223,7 @@ export class MsgStorageService {
         } catch (e) {
             await runner.rollbackTransaction();
             msgs.forEach(m => this.saveToMemory(m));
+            await Promise.all(msgs.map(m => this.appendFallback(m)));
         } finally {
             await runner.release();
         }
@@ -204,11 +264,14 @@ export class MsgStorageService {
         if (params.keyword) {
             try {
                 const qb = this.msgRepo.createQueryBuilder('m').where(where);
-                if ((this.dataSource.options.type as string) === 'mysql') {
+                const dbType = (this.dataSource.options.type as string);
+                if (dbType === 'mysql') {
                     await this.dataSource.query("SET SESSION innodb_ft_user_stopword_table=DEFAULT");
                     qb.andWhere("MATCH(m.content) AGAINST (:kw IN BOOLEAN MODE)", { kw: params.keyword + '*' });
-                } else {
+                } else if (dbType === 'postgres' || dbType === 'postgresql') {
                     qb.andWhere("to_tsvector('simple', m.content) @@ plainto_tsquery('simple', :kw)", { kw: params.keyword });
+                } else {
+                    qb.andWhere("m.content LIKE :kw", { kw: `%${params.keyword}%` });
                 }
                 qb.orderBy('m.msg_time', 'DESC').skip(skip).take(pageSize);
                 [list, total] = await qb.getManyAndCount();
@@ -236,6 +299,12 @@ export class MsgStorageService {
         }
 
         return { list, total, page, pageSize };
+    }
+
+    private resolveSqlJsDbFile(): string {
+        const base = process.env['NAPCAT_WORKDIR'] || process.cwd();
+        const dir = path.join(base, 'storage');
+        return path.join(dir, 'napcat_sqlite.sqljs');
     }
 
     private extractContent(elements: any[]): string {

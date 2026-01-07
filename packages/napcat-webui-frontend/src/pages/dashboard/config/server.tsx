@@ -1,4 +1,5 @@
 import { Input } from '@heroui/input';
+import { Select, SelectItem } from '@heroui/select';
 import { useRequest } from 'ahooks';
 import { useEffect } from 'react';
 import { Controller, useForm } from 'react-hook-form';
@@ -30,6 +31,7 @@ const ServerConfigCard = () => {
     disableWebUI: boolean;
     disableNonLANAccess: boolean;
     msgDbEnable: boolean;
+    dbType: 'mysql' | 'postgres' | 'sqljs';
   }>({
     defaultValues: {
       host: '0.0.0.0',
@@ -38,6 +40,7 @@ const ServerConfigCard = () => {
       disableWebUI: false,
       disableNonLANAccess: false,
       msgDbEnable: true,
+      dbType: 'sqljs',
     },
   });
 
@@ -49,6 +52,7 @@ const ServerConfigCard = () => {
       setConfigValue('disableWebUI', configData.disableWebUI);
       setConfigValue('disableNonLANAccess', configData.disableNonLANAccess);
       setConfigValue('msgDbEnable', configData.msgDbEnable ?? true);
+      setConfigValue('dbType', (configData.dbType as any) ?? 'mysql');
     }
   };
 
@@ -188,6 +192,23 @@ const ServerConfigCard = () => {
                 label='启用消息数据库'
                 description='开启后将持久化保存消息记录并提供历史查询与检索'
               />
+            )}
+          />
+          <Controller
+            control={control}
+            name='dbType'
+            render={({ field }) => (
+              <Select
+                label='数据库类型'
+                selectedKeys={[field.value]}
+                onChange={(e) => field.onChange(e.target.value as any)}
+                className='max-w-xs'
+                disallowEmptySelection
+              >
+                <SelectItem key='mysql'>MySQL</SelectItem>
+                <SelectItem key='postgres'>PostgreSQL</SelectItem>
+                <SelectItem key='sqljs'>嵌入式（SQL.js）</SelectItem>
+              </Select>
             )}
           />
         </div>

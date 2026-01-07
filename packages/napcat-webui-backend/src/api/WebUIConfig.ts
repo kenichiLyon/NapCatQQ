@@ -14,6 +14,7 @@ export const GetWebUIConfigHandler: RequestHandler = async (_, res) => {
       disableWebUI: config.disableWebUI,
       disableNonLANAccess: config.disableNonLANAccess,
       msgDbEnable: (config as any).msgDbEnable ?? true,
+      dbType: (config as any).dbType ?? 'mysql',
     });
   } catch (error) {
     const msg = (error as Error).message;
@@ -126,7 +127,34 @@ export const UpdateWebUIConfigHandler: RequestHandler = async (req, res) => {
       updateConfig.msgDbEnable = req.body.msgDbEnable;
     }
 
+    if (req.body.dbType !== undefined) {
+      const allowed = ['mysql', 'postgres', 'sqljs'];
+      if (!allowed.includes(req.body.dbType)) {
+        return sendError(res, 'dbType必须是 mysql/postgres/sqljs 之一');
+      }
+      updateConfig.dbType = req.body.dbType;
+    }
+
     await WebUiConfig.UpdateWebUIConfig(updateConfig);
+    // 同步到 napcat.json
+    const cfgDir = webUiPathWrapper.configPath;
+    const files = await fs.readdir(cfgDir);
+    const targets = files.filter(f => f.startsWith('napcat') && f.endsWith('.json')).map(f => path.join(cfgDir, f));
+    for (const file of targets) {
+      try {
+        const content = await fs.readFile(file, 'utf-8');
+        const json = JSON.parse(content);
+        if (updateConfig.msgDbEnable !== undefined) {
+          json.db = json.db || {};
+          json.db.enable = updateConfig.msgDbEnable;
+        }
+        if (updateConfig.dbType !== undefined) {
+          json.db = json.db || {};
+          json.db.type = updateConfig.dbType;
+        }
+        await fs.writeFile(file, JSON.stringify(json, null, 2), 'utf-8');
+      } catch {}
+    }
     return sendSuccess(res, null);
   } catch (error) {
     const msg = (error as Error).message;

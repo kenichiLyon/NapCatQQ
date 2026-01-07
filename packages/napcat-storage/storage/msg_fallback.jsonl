@@ -1,0 +1,6 @@
+{"msgId":"id0","msgSeq":"0","msgRandom":"0","msgTime":"1767786849537","senderUid":"u0","senderUin":"10000","peerUid":"p0","peerUin":"20000","chatType":1,"elements":[{"textElement":{"content":"hello 0"}}]}
+{"msgId":"id2","msgSeq":"2","msgRandom":"2","msgTime":"1767786849537","senderUid":"u2","senderUin":"10002","peerUid":"p2","peerUin":"20002","chatType":1,"elements":[{"textElement":{"content":"hello 2"}}]}
+{"msgId":"id1","msgSeq":"1","msgRandom":"1","msgTime":"1767786849537","senderUid":"u1","senderUin":"10001","peerUid":"p1","peerUin":"20001","chatType":1,"elements":[{"textElement":{"content":"hello 1"}}]}
+{"msgId":"id0","msgSeq":"0","msgRandom":"0","msgTime":"1767786871569","senderUid":"u0","senderUin":"10000","peerUid":"p0","peerUin":"20000","chatType":1,"elements":[{"textElement":{"content":"hello 0"}}]}
+{"msgId":"id1","msgSeq":"1","msgRandom":"1","msgTime":"1767786871569","senderUid":"u1","senderUin":"10001","peerUid":"p1","peerUin":"20001","chatType":1,"elements":[{"textElement":{"content":"hello 1"}}]}
+{"msgId":"id2","msgSeq":"2","msgRandom":"2","msgTime":"1767786871569","senderUid":"u2","senderUin":"10002","peerUid":"p2","peerUin":"20002","chatType":1,"elements":[{"textElement":{"content":"hello 2"}}]}
