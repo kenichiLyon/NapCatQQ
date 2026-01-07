@@ -25,19 +25,44 @@ jobs:
           version: 8
           run_install: true
 
+      - name: Validate SemVer Tag
+        id: semver
+        shell: bash
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          if [[ "${GITHUB_REF_TYPE}" != "tag" ]]; then
+            echo "valid=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          SEMVER_REGEX="^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-((0|[1-9][0-9]*|[0-9]*[a-zA-Z-][0-9a-zA-Z-]*)(\.(0|[1-9][0-9]*|[0-9]*[a-zA-Z-][0-9a-zA-Z-]*))*))?$"
+          if [[ "$TAG" =~ $SEMVER_REGEX ]]; then
+            echo "valid=true" >> $GITHUB_OUTPUT
+            echo "version=$TAG" >> $GITHUB_OUTPUT
+          else
+            echo "valid=false" >> $GITHUB_OUTPUT
+          fi
+          if [[ "$TAG" == *-* ]]; then
+            echo "prerelease=true" >> $GITHUB_OUTPUT
+          else
+            echo "prerelease=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Build Shell
+        if: steps.semver.outputs.valid == 'true'
         run: pnpm --filter napcat-shell run build
 
       - name: Archive Artifacts
+        if: steps.semver.outputs.valid == 'true'
         run: |
           mkdir -p release
           cp -r packages/napcat-shell/dist release/napcat-shell-dist
 
       - name: Create Pre-Release
+        if: steps.semver.outputs.valid == 'true'
         uses: softprops/action-gh-release@v2
         with:
-          name: Pre-Release ${{ github.ref_name }}
-          prerelease: true
+          name: Pre-Release ${{ steps.semver.outputs.version }}
+          prerelease: ${{ steps.semver.outputs.prerelease }}
           files: |
             release/napcat-shell-dist/**
         env:
